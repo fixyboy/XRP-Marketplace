@@ -273,11 +273,8 @@
 </div>
 
 <script>
-// ─── State ────────────────────────────────────────────────────────────────────
 let client = null
 const wallets = { seller: null, buyer: null, broker: null }
-
-// ─── Loader ───────────────────────────────────────────────────────────────────
 
 function showLoader(msg = 'loading…') {
   const el = document.getElementById('loader')
@@ -291,7 +288,6 @@ function hideLoader() {
   el.classList.add('fade-out')
 }
 
-// Auto-dismiss splash on page load after a short delay
 window.addEventListener('DOMContentLoaded', () => {
   setTimeout(hideLoader, 1200)
 })
@@ -718,8 +714,6 @@ async function cancelOffer() {
     log('cancel error: ' + e.message, 'err')
   }
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fillBrokerAddr()  { if (wallets.broker) document.getElementById('sell-destination').value = wallets.broker.address }
 function fillSellerAddr()  { if (wallets.seller) document.getElementById('buy-owner').value = wallets.seller.address }
