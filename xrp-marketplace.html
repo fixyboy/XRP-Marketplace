@@ -1,11 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XRP NFT Marketplace — Testnet</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/xrpl@3.0.0/build/xrpl-latest-min.js"></script>
+  <style>
+    .log-ok   { color: #22c55e; }
+    .log-err  { color: #ef4444; }
+    .log-info { color: #94a3b8; }
+
+    @keyframes xrp-spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+    #loader {
+      transition: opacity 0.4s ease;
+    }
+    #loader.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen p-6 font-mono">
+
+<!-- Loading overlay -->
+<div id="loader" class="fixed inset-0 bg-gray-950 flex flex-col items-center justify-center z-50 gap-4">
+  <svg style="width:72px;height:72px;animation:xrp-spin 1.4s linear infinite;" viewBox="0 0 100 90" xmlns="http://www.w3.org/2000/svg">
+  <path d="M4 4 L43 42 Q50 50 57 42 L96 4" stroke="white" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M4 86 L43 48 Q50 40 57 48 L96 86" stroke="white" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+  <p id="loader-msg" class="text-xs text-gray-500 tracking-widest uppercase">initialising…</p>
+</div>
+
+<div class="max-w-5xl mx-auto space-y-5">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight">XRP NFT Marketplace</h1>
+      <p class="text-gray-500 text-xs mt-0.5">testnet · broker mode</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="conn-dot" class="w-2 h-2 rounded-full bg-red-500"></span>
+      <span id="conn-label" class="text-xs text-gray-400">disconnected</span>
+      <button onclick="toggleConnect()" id="conn-btn"
+        class="ml-2 px-3 py-1.5 rounded text-xs bg-indigo-600 hover:bg-indigo-500 transition-colors">
+        Connect
+      </button>
+    </div>
+  </div>
+
+  <!-- Wallets -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+    <!-- Seller -->
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+      <p class="text-xs text-gray-500 mb-2 uppercase tracking-widest">Seller</p>
+      <input id="seller-seed" placeholder="seed — blank to generate"
+        class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs mb-2 focus:outline-none focus:border-indigo-500" />
+      <button onclick="loadWallet('seller')"
+        class="w-full py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-xs transition-colors">Load / Generate</button>
+      <div id="seller-info" class="mt-3 text-xs text-gray-400 break-all hidden space-y-1">
+        <div class="text-green-400" id="seller-addr"></div>
+        <div>balance: <span id="seller-bal" class="text-yellow-400">—</span> XRP</div>
+      </div>
+    </div>
+    <!-- Buyer -->
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+      <p class="text-xs text-gray-500 mb-2 uppercase tracking-widest">Buyer</p>
+      <input id="buyer-seed" placeholder="seed — blank to generate"
+        class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs mb-2 focus:outline-none focus:border-indigo-500" />
+      <button onclick="loadWallet('buyer')"
+        class="w-full py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-xs transition-colors">Load / Generate</button>
+      <div id="buyer-info" class="mt-3 text-xs text-gray-400 break-all hidden space-y-1">
+        <div class="text-green-400" id="buyer-addr"></div>
+        <div>balance: <span id="buyer-bal" class="text-yellow-400">—</span> XRP</div>
+      </div>
+    </div>
+    <!-- Broker -->
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+      <p class="text-xs text-gray-500 mb-2 uppercase tracking-widest">Broker (us)</p>
+      <input id="broker-seed" placeholder="seed — blank to generate"
+        class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs mb-2 focus:outline-none focus:border-indigo-500" />
+      <button onclick="loadWallet('broker')"
+        class="w-full py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-xs transition-colors">Load / Generate</button>
+      <div id="broker-info" class="mt-3 text-xs text-gray-400 break-all hidden space-y-1">
+        <div class="text-green-400" id="broker-addr"></div>
+        <div>balance: <span id="broker-bal" class="text-yellow-400">—</span> XRP</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Faucet -->
+  <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+    <p class="text-xs text-gray-500 mb-3 uppercase tracking-widest">Testnet Faucet</p>
+    <div class="flex flex-wrap gap-2">
+      <button onclick="fundWallet('seller')" class="px-3 py-1.5 rounded bg-emerald-800 hover:bg-emerald-700 text-xs transition-colors">Fund Seller</button>
+      <button onclick="fundWallet('buyer')"  class="px-3 py-1.5 rounded bg-emerald-800 hover:bg-emerald-700 text-xs transition-colors">Fund Buyer</button>
+      <button onclick="fundWallet('broker')" class="px-3 py-1.5 rounded bg-emerald-800 hover:bg-emerald-700 text-xs transition-colors">Fund Broker</button>
+    </div>
+    <p class="text-xs text-gray-600 mt-2">Creates the account on testnet and deposits ~1000 XRP.</p>
+  </div>
+
+  <!-- Mint -->
+  <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+    <p class="text-xs text-gray-500 mb-3 uppercase tracking-widest">Step 1 — Mint NFT <span class="text-gray-600 normal-case">(seller signs)</span></p>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="text-xs text-gray-600 block mb-1">TransferFee (0–50000, 1000 = 1%)</label>
+        <input id="mint-fee" value="1000" type="number" min="0" max="50000"
+          class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+      </div>
+      <div>
+        <label class="text-xs text-gray-600 block mb-1">URI</label>
+        <input id="mint-uri" value="https://example.com/nft/1"
+          class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+      </div>
+    </div>
+    <button onclick="mintNFT()" class="mt-3 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-xs transition-colors">Mint NFT</button>
+    <div id="minted-nft" class="mt-3 text-xs text-gray-500 hidden">
+      NFTokenID → <span id="minted-nft-id" class="text-yellow-400 break-all"></span>
+    </div>
+  </div>
+
+  <!-- View NFTs -->
+  <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+    <p class="text-xs text-gray-500 mb-3 uppercase tracking-widest">View NFTs</p>
+    <div class="flex gap-2">
+      <input id="view-addr" placeholder="address (blank = seller)"
+        class="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+      <button onclick="viewNFTs()" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-xs transition-colors">Fetch</button>
+    </div>
+    <div id="nft-list" class="mt-3 space-y-2"></div>
+  </div>
+
+  <!-- Sell Offer -->
+  <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+    <p class="text-xs text-gray-500 mb-3 uppercase tracking-widest">Step 2 — Sell Offer <span class="text-gray-600 normal-case">(seller signs)</span></p>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="text-xs text-gray-600 block mb-1">NFTokenID</label>
+        <input id="sell-nft-id" placeholder="NFTokenID"
+          class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+      </div>
+      <div>
+        <label class="text-xs text-gray-600 block mb-1">Ask price (XRP)</label>
+        <input id="sell-price" value="95" type="number"
+          class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+      </div>
+      <div class="col-span-2">
+        <label class="text-xs text-gray-600 block mb-1">Destination — optional, restricts offer to a specific broker</label>
+        <div class="flex gap-2">
+          <input id="sell-destination" placeholder="leave blank for open offer"
+            class="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+          <button onclick="fillBrokerAddr()" class="px-2 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-xs">← broker addr</button>
+        </div>
+      </div>
+    </div>
+    <button onclick="createSellOffer()" class="mt-3 px-3 py-1.5 rounded bg-orange-700 hover:bg-orange-600 text-xs transition-colors">Create Sell Offer</button>
+    <div id="sell-offer-result" class="mt-3 text-xs text-gray-500 hidden">
+      offer index → <span id="sell-offer-index" class="text-orange-400 break-all"></span>
+    </div>
+  </div>
+
+  <!-- Buy Offer -->
+  <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+    <p class="text-xs text-gray-500 mb-3 uppercase tracking-widest">Step 3 — Buy Offer <span class="text-gray-600 normal-case">(buyer signs)</span></p>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="text-xs text-gray-600 block mb-1">NFTokenID</label>
+        <input id="buy-nft-id" placeholder="NFTokenID"
+          class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+      </div>
+      <div>
+        <label class="text-xs text-gray-600 block mb-1">Bid amount (XRP) — must be ≥ ask</label>
+        <input id="buy-price" value="100" type="number"
+          class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+      </div>
+      <div class="col-span-2">
+        <label class="text-xs text-gray-600 block mb-1">Seller address (current NFT owner)</label>
+        <div class="flex gap-2">
+          <input id="buy-owner" placeholder="seller address"
+            class="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+          <button onclick="fillSellerAddr()" class="px-2 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-xs">← seller addr</button>
+        </div>
+      </div>
+    </div>
+    <button onclick="createBuyOffer()" class="mt-3 px-3 py-1.5 rounded bg-sky-700 hover:bg-sky-600 text-xs transition-colors">Create Buy Offer</button>
+    <div id="buy-offer-result" class="mt-3 text-xs text-gray-500 hidden">
+      offer index → <span id="buy-offer-index" class="text-sky-400 break-all"></span>
+    </div>
+  </div>
+
+  <!-- Broker Settle -->
+  <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+    <p class="text-xs text-gray-500 mb-1 uppercase tracking-widest">Step 4 — Settle <span class="text-gray-600 normal-case">(broker signs)</span></p>
+    <p class="text-xs text-gray-600 mb-3">XRPL distributes atomically: buyer → creator royalty → broker spread → seller net</p>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="text-xs text-gray-600 block mb-1">Sell offer index</label>
+        <div class="flex gap-1">
+          <input id="settle-sell" placeholder="sell offer index"
+            class="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+          <button onclick="fillSellIndex()" class="px-2 rounded bg-gray-700 hover:bg-gray-600 text-xs">↑</button>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-gray-600 block mb-1">Buy offer index</label>
+        <div class="flex gap-1">
+          <input id="settle-buy" placeholder="buy offer index"
+            class="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+          <button onclick="fillBuyIndex()" class="px-2 rounded bg-gray-700 hover:bg-gray-600 text-xs">↑</button>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-gray-600 block mb-1">Broker fee (drops)</label>
+        <div class="flex gap-1">
+          <input id="settle-fee" value="0" type="number"
+            class="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+          <button onclick="calcBrokerFee()" class="px-2 rounded bg-gray-700 hover:bg-gray-600 text-xs" title="auto-calc from ask/bid spread">auto</button>
+        </div>
+      </div>
+    </div>
+    <button onclick="brokerSettle()" class="mt-3 px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-xs transition-colors">Settle Transaction</button>
+    <div id="settle-result" class="mt-3 text-xs hidden space-y-1">
+      <div>result: <span id="settle-result-code" class="font-bold"></span></div>
+      <div class="text-gray-500">tx: <span id="settle-tx-hash" class="text-purple-400 break-all"></span></div>
+      <a id="settle-explorer-link" href="#" target="_blank" class="text-indigo-400 hover:underline hidden text-xs">view on explorer →</a>
+    </div>
+  </div>
+
+  <!-- View Offers -->
+  <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+    <p class="text-xs text-gray-500 mb-3 uppercase tracking-widest">View Offers for an NFT</p>
+    <div class="flex gap-2">
+      <input id="offers-nft-id" placeholder="NFTokenID"
+        class="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+      <button onclick="viewOffers()" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-xs transition-colors">Fetch</button>
+    </div>
+    <div id="offers-list" class="mt-3 space-y-2"></div>
+  </div>
+
+  <!-- Cancel -->
+  <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+    <p class="text-xs text-gray-500 mb-3 uppercase tracking-widest">Cancel Offer</p>
+    <div class="flex gap-2">
+      <select id="cancel-wallet" class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs">
+        <option value="seller">as seller</option>
+        <option value="buyer">as buyer</option>
+        <option value="broker">as broker</option>
+      </select>
+      <input id="cancel-offer-index" placeholder="offer index"
+        class="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500" />
+      <button onclick="cancelOffer()" class="px-3 py-1.5 rounded bg-red-800 hover:bg-red-700 text-xs transition-colors">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-xs text-gray-500 uppercase tracking-widest">Log</p>
+      <button onclick="clearLog()" class="text-xs text-gray-600 hover:text-gray-400">clear</button>
+    </div>
+    <div id="log" class="space-y-0.5 max-h-60 overflow-y-auto text-xs">
+      <div class="log-info">waiting for connection…</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
 // ─── State ────────────────────────────────────────────────────────────────────
 let client = null
 const wallets = { seller: null, buyer: null, broker: null }
 
+// ─── Loader ───────────────────────────────────────────────────────────────────
+
+function showLoader(msg = 'loading…') {
+  const el = document.getElementById('loader')
+  const msgEl = document.getElementById('loader-msg')
+  el.classList.remove('fade-out')
+  msgEl.textContent = msg
+}
+
+function hideLoader() {
+  const el = document.getElementById('loader')
+  el.classList.add('fade-out')
+}
+
+// Auto-dismiss splash on page load after a short delay
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(hideLoader, 1200)
+})
+
 // ─── Connection ───────────────────────────────────────────────────────────────
 
-// Opens (or closes) a WebSocket connection to the XRPL testnet node.
-// xrpl.Client wraps the WebSocket — no auth needed, XRPL nodes are public.
 async function toggleConnect() {
   if (client && client.isConnected()) {
     await client.disconnect()
@@ -18,6 +310,7 @@ async function toggleConnect() {
   const node = 'wss://s.altnet.rippletest.net:51233'
   log(`connecting to ${node}…`, 'info')
   client = new xrpl.Client(node)
+  showLoader('connecting to testnet…')
   try {
     await client.connect()
     setConnState(true)
@@ -25,6 +318,8 @@ async function toggleConnect() {
   } catch (e) {
     log('connection failed: ' + e.message, 'err')
     client = null
+  } finally {
+    hideLoader()
   }
 }
 
@@ -47,10 +342,6 @@ function requireWallet(role) {
 
 // ─── Wallets ──────────────────────────────────────────────────────────────────
 
-// Derives (or generates) an XRPL keypair from a seed.
-// xrpl.Wallet.fromSeed(seed) → derives the address + private key deterministically
-// xrpl.Wallet.generate()    → creates a brand new random keypair
-// The wallet object holds: seed, publicKey, privateKey, address
 async function loadWallet(role) {
   const seed = document.getElementById(`${role}-seed`).value.trim()
   try {
@@ -66,8 +357,6 @@ async function loadWallet(role) {
   }
 }
 
-// Calls account_info on the ledger to read the XRP balance for a given address.
-// Balance is returned in drops (1 XRP = 1,000,000 drops).
 async function refreshBalance(role) {
   try {
     const res = await client.request({
@@ -90,13 +379,11 @@ async function refreshAllBalances() {
 
 // ─── Faucet ───────────────────────────────────────────────────────────────────
 
-// client.fundWallet() hits the XRPL testnet faucet HTTP endpoint.
-// It creates the account on-chain (XRPL accounts need a 10 XRP reserve to activate)
-// and deposits ~1000 XRP into it. Only works on testnet / devnet.
 async function fundWallet(role) {
   if (!requireClient()) return
   if (!wallets[role]) { log(`load ${role} wallet first`, 'err'); return }
   log(`funding ${role} from faucet…`, 'info')
+  showLoader(`funding ${role}…`)
   try {
     const result = await client.fundWallet(wallets[role])
     wallets[role] = result.wallet
@@ -107,28 +394,20 @@ async function fundWallet(role) {
     log(`${role} funded — ${result.wallet.address} (${result.balance} XRP)`, 'ok')
   } catch (e) {
     log(`faucet error (${role}): ${e.message}`, 'err')
+  } finally {
+    hideLoader()
   }
 }
 
 // ─── Mint NFT ─────────────────────────────────────────────────────────────────
 
-// NFTokenMint creates a new NFT on the ledger owned by the signing account.
-// Key fields:
-//   NFTokenTaxon — a creator-defined category number (can be anything, we use 0)
-//   TransferFee  — royalty percentage in 1/100,000 units (1000 = 1%)
-//                  immutable after minting, enforced at consensus on every resale
-//   Flags: 8     — tfTransferable, allows the NFT to be sold to third parties
-//   URI          — hex-encoded link to the token's metadata (stored on-chain)
-//
-// client.autofill() fills in Sequence, Fee, LastLedgerSequence automatically.
-// wallet.sign()     signs the transaction locally — private key never leaves the browser.
-// client.submitAndWait() broadcasts the signed tx and waits for ledger validation.
 async function mintNFT() {
   if (!requireClient() || !requireWallet('seller')) return
   const fee = parseInt(document.getElementById('mint-fee').value) || 0
   const uri = toHex(document.getElementById('mint-uri').value.trim())
 
   log('minting NFT…', 'info')
+  showLoader('minting NFT…')
   try {
     const tx = {
       TransactionType: 'NFTokenMint',
@@ -147,8 +426,6 @@ async function mintNFT() {
       return
     }
 
-    // The NFTokenID is inside the ledger metadata — we look for the NFTokenPage
-    // node that was modified/created and diff the NFTokens arrays to find the new one.
     const nftNode = result.result.meta.AffectedNodes?.find(n =>
       n.ModifiedNode?.LedgerEntryType === 'NFTokenPage' ||
       n.CreatedNode?.LedgerEntryType  === 'NFTokenPage'
@@ -172,13 +449,13 @@ async function mintNFT() {
     await refreshBalance('seller')
   } catch (e) {
     log('mint error: ' + e.message, 'err')
+  } finally {
+    hideLoader()
   }
 }
 
 // ─── View NFTs ────────────────────────────────────────────────────────────────
 
-// account_nfts returns all NFTs currently owned by an address.
-// Each entry includes NFTokenID, TransferFee, Flags, URI (hex), NFTokenTaxon.
 async function viewNFTs() {
   if (!requireClient()) return
   const addr = document.getElementById('view-addr').value.trim() || wallets.seller?.address
@@ -228,11 +505,6 @@ function useNFT(id) {
 
 // ─── Sell Offer ───────────────────────────────────────────────────────────────
 
-// NFTokenCreateOffer with Flags: 1 (tfSellNFToken) creates a sell listing.
-// Amount is in drops (we convert XRP → drops here).
-// Destination is optional — if set, only that address can accept the offer as broker.
-// After submission, we extract the offer's ledger index from the metadata
-// (it's inside a CreatedNode with LedgerEntryType "NFTokenOffer").
 async function createSellOffer() {
   if (!requireClient() || !requireWallet('seller')) return
   const nftokenId   = document.getElementById('sell-nft-id').value.trim()
@@ -241,6 +513,7 @@ async function createSellOffer() {
   if (!nftokenId) { log('enter NFTokenID', 'err'); return }
 
   log(`creating sell offer ${dropsToXrp(drops)} XRP…`, 'info')
+  showLoader('creating sell offer…')
   try {
     const tx = {
       TransactionType: 'NFTokenCreateOffer',
@@ -267,14 +540,13 @@ async function createSellOffer() {
     await refreshBalance('seller')
   } catch (e) {
     log('sell offer error: ' + e.message, 'err')
+  } finally {
+    hideLoader()
   }
 }
 
 // ─── Buy Offer ────────────────────────────────────────────────────────────────
 
-// NFTokenCreateOffer without tfSellNFToken creates a buy offer.
-// Owner field is required for buy offers — it's the address that currently holds the NFT.
-// The buyer is saying "I want to buy NFT X from Owner Y and I'll pay Z drops."
 async function createBuyOffer() {
   if (!requireClient() || !requireWallet('buyer')) return
   const nftokenId = document.getElementById('buy-nft-id').value.trim()
@@ -284,6 +556,7 @@ async function createBuyOffer() {
   if (!owner)     { log('enter seller address', 'err'); return }
 
   log(`creating buy offer ${dropsToXrp(drops)} XRP…`, 'info')
+  showLoader('creating buy offer…')
   try {
     const tx = {
       TransactionType: 'NFTokenCreateOffer',
@@ -309,32 +582,22 @@ async function createBuyOffer() {
     await refreshBalance('buyer')
   } catch (e) {
     log('buy offer error: ' + e.message, 'err')
+  } finally {
+    hideLoader()
   }
 }
 
 // ─── Broker Settle ────────────────────────────────────────────────────────────
 
-// NFTokenAcceptOffer in broker mode requires BOTH NFTokenSellOffer and NFTokenBuyOffer.
-// The broker account signs this transaction.
-//
-// NFTokenBrokerFee (optional) — the cut the broker claims from the spread.
-//   Must be ≤ (buyer bid − seller ask). If omitted, the broker gets the full spread anyway
-//   but it's best practice to set it explicitly.
-//
-// XRPL then distributes funds atomically in this order:
-//   1. Debit buyer
-//   2. Credit issuer (TransferFee %)
-//   3. Credit broker (NFTokenBrokerFee)
-//   4. Credit seller (remainder)
-// If any step fails (e.g. buyer doesn't have enough XRP), the whole tx is rejected.
 async function brokerSettle() {
   if (!requireClient() || !requireWallet('broker')) return
-  const sellIdx    = document.getElementById('settle-sell').value.trim()
-  const buyIdx     = document.getElementById('settle-buy').value.trim()
-  const feeDrops   = parseInt(document.getElementById('settle-fee').value) || 0
+  const sellIdx  = document.getElementById('settle-sell').value.trim()
+  const buyIdx   = document.getElementById('settle-buy').value.trim()
+  const feeDrops = parseInt(document.getElementById('settle-fee').value) || 0
   if (!sellIdx || !buyIdx) { log('enter both offer indexes', 'err'); return }
 
   log(`settling…`, 'info')
+  showLoader('settling transaction…')
   try {
     const tx = {
       TransactionType: 'NFTokenAcceptOffer',
@@ -368,14 +631,13 @@ async function brokerSettle() {
     await refreshAllBalances()
   } catch (e) {
     log('settlement error: ' + e.message, 'err')
+  } finally {
+    hideLoader()
   }
 }
 
 // ─── View Offers ──────────────────────────────────────────────────────────────
 
-// nft_sell_offers and nft_buy_offers return all open offers for a given NFTokenID.
-// We run both in parallel with Promise.allSettled so one failing doesn't block the other
-// (e.g. if there are no sell offers, that command returns an error — not an empty array).
 async function viewOffers() {
   if (!requireClient()) return
   const id = document.getElementById('offers-nft-id').value.trim()
@@ -431,9 +693,6 @@ function useOfferIndex(index, type) {
 
 // ─── Cancel Offer ─────────────────────────────────────────────────────────────
 
-// NFTokenCancelOffer removes one or more offers from the ledger.
-// NFTokenOffers is an array — you can cancel multiple in one tx.
-// Only the offer owner (or the NFT owner for buy offers) can cancel.
 async function cancelOffer() {
   if (!requireClient()) return
   const role  = document.getElementById('cancel-wallet').value
@@ -475,15 +734,11 @@ function calcBrokerFee() {
   log(`broker fee → ${spread} drops (${(bid - ask).toFixed(4)} XRP spread)`, 'info')
 }
 
-// Extracts the NFTokenOffer ledger index from a validated tx's AffectedNodes.
-// XRPL metadata contains a list of every ledger object created/modified/deleted.
-// CreatedNode with LedgerEntryType "NFTokenOffer" = the newly created offer entry.
 function extractOfferIndex(meta) {
   const node = meta.AffectedNodes?.find(n => n.CreatedNode?.LedgerEntryType === 'NFTokenOffer')
   return node?.CreatedNode?.LedgerIndex || '—'
 }
 
-// XRPL stores URIs as uppercase hex strings on-chain.
 function toHex(str) {
   return Array.from(new TextEncoder().encode(str))
     .map(b => b.toString(16).padStart(2, '0'))
@@ -509,3 +764,6 @@ function log(msg, type = 'info') {
 }
 
 function clearLog() { document.getElementById('log').innerHTML = '' }
+</script>
+</body>
+</html>
